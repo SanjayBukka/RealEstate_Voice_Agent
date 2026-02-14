@@ -1,0 +1,6 @@
+streamlit==1.31.0
+groq==0.4.2
+python-dotenv==1.0.1
+pyttsx3==2.90
+ollama==0.1.6
+streamlit-webrtc==0.47.1
