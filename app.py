@@ -2,12 +2,14 @@
 Real Estate AI Agent - Voice Conversation App
 """
 import streamlit as st
+import re
 from datetime import datetime
 
 # Import custom modules
 from llm_client import LLMClient
 from conversation_logger import ConversationLogger, format_conversation_for_display
 from property_data import PROPERTIES
+from appointment_agent import AppointmentAgent
 
 # Page Configuration
 st.set_page_config(
@@ -39,6 +41,12 @@ if 'agent_spoke' not in st.session_state:
     st.session_state.agent_spoke = ""
 if 'voice_text' not in st.session_state:
     st.session_state.voice_text = ""
+if 'appointment_agent' not in st.session_state:
+    st.session_state.appointment_agent = AppointmentAgent()
+if 'email_sent' not in st.session_state:
+    st.session_state.email_sent = False
+if 'selected_property' not in st.session_state:
+    st.session_state.selected_property = None
 
 # Sidebar
 with st.sidebar:
@@ -248,6 +256,57 @@ if submitted and text_input:
             st.session_state.user_info['Budget'] = f"${intent.get('budget_max'):,}"
         if intent.get('property_type'):
             st.session_state.user_info['Property Type'] = intent.get('property_type')
+    
+    # Extract name from conversation
+    text_lower = text_input.lower()
+    if 'my name is' in text_lower or 'i am' in text_lower or "i'm" in text_lower:
+        name_match = re.search(r'(?:my name is|i am|i\'m)\s+([a-zA-Z]+)', text_lower)
+        if name_match:
+            st.session_state.user_info['Name'] = name_match.group(1).title()
+    
+    # Extract email
+    email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text_input)
+    if email_match:
+        st.session_state.user_info['Email'] = email_match.group(0)
+    
+    # Check for site visit request and send emails
+    site_visit_keywords = ['site visit', 'visit', 'schedule', 'book', 'appointment', 'see the property', 'view the property']
+    is_site_visit = any(kw in text_lower for kw in site_visit_keywords)
+    
+    # Check for time preference
+    visit_time = 'morning'
+    if 'afternoon' in text_lower or 'evening' in text_lower:
+        visit_time = 'afternoon'
+    elif 'morning' in text_lower:
+        visit_time = 'morning'
+    
+    # If site visit confirmed and we have customer info, send emails
+    if is_site_visit and not st.session_state.email_sent:
+        customer_info = {
+            'name': st.session_state.user_info.get('Name', 'Valued Customer'),
+            'email': st.session_state.user_info.get('Email', ''),
+            'phone': st.session_state.user_info.get('Phone', 'Not provided')
+        }
+        
+        # Get property info from selected or first matching
+        property_info = st.session_state.selected_property or {
+            'name': 'Downtown Dallas Apartment',
+            'address': 'Downtown Dallas, TX',
+            'price': st.session_state.user_info.get('Budget', '$1,500,000'),
+            'type': st.session_state.user_info.get('Property Type', 'apartment')
+        }
+        
+        if customer_info.get('email'):
+            result = st.session_state.appointment_agent.schedule_site_visit(
+                customer_info, property_info, visit_time
+            )
+            st.session_state.email_sent = True
+            st.session_state.booking_ref = result.get('booking_ref', '')
+            
+            if result.get('customer_email_sent'):
+                st.success(f"📧 Confirmation email sent to {customer_info['email']}!")
+            if result.get('officer_email_sent'):
+                st.success("📧 Field officer notified!")
     
     # Get LLM response
     chat_msgs = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
