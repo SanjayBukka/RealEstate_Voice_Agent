@@ -54,6 +54,8 @@ GROQ_API_KEY=your_actual_api_key_here
 streamlit run app.py
 ```
 
+python twilio_call.py +91XXXXXXXX47{to run voce agent that calls to you on your mobile}
+
 The app will open in your browser at `http://localhost:8501`
 
 ## 🎤 Using Voice Features
